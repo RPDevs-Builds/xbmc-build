@@ -1,24 +1,19 @@
 # Kodi Core Builder 🏗️
 
-This repository is a dedicated **Builder** for the **Kodi Core** component of the Kodi ecosystem. 
+This repository is the automated **Builder** for **Kodi Core**.
 
-## Role in Ecosystem
-This repository is part of the [Kodi Build Hub](https://github.com/IamRPDev/kodi-build). Its primary responsibilities are:
-1.  **Orchestration**: Triggered by the central hub to start builds.
-2.  **Compilation**: Maintains the `./source` and `./compiled` directory structure to build the component from upstream source.
-3.  **Distribution**: Upon successful build, it dispatches the final installers to OS-specific release repositories.
+## Ecosystem Role
+Part of the [Kodi Build Hub](https://github.com/IamRPDev/kodi-build). This repo distributes to platform-specific repositories.
 
-## Supported Branches
-- **Piers**: The latest development/master branch.
-- **Omega**: The stable release branch.
+## Build Structure
+The build process strictly follows this standardized structure:
+- **Source**: Upstream code is checked out into `./source/xbmc/`.
+- **Output**: Compiled binaries are organized into `./compiled/<os>/<version>/`.
+- **Artifacts**: Final files use the naming convention `xbmc-<os>-<version>-<branch>.[zip|tar.gz]`.
 
-## Build Matrix
-| Platform | Status | Release Target |
-|:---|:---:|:---|
-| Linux 64 | [![Build Status](https://github.com/IamRPDev/xbmc-build/actions/workflows/build.yml/badge.svg)](https://github.com/IamRPDev/xbmc-build/actions) | [xbmc-build-linux64](https://github.com/IamRPDev/xbmc-build-linux64) |
-| Windows 64 | | [xbmc-build-win64](https://github.com/IamRPDev/xbmc-build-win64) |
-| Android ARM64 | | [xbmc-build-android-arm64](https://github.com/IamRPDev/xbmc-build-android-arm64) |
-| OSX 64 | | [xbmc-build-osx64](https://github.com/IamRPDev/xbmc-build-osx64) |
+## Live Status
+- **Piers (master)**: [![Piers Status](https://github.com/IamRPDev/xbmc-build/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/IamRPDev/xbmc-build/actions)
+- **Omega**: [![Omega Status](https://github.com/IamRPDev/xbmc-build/actions/workflows/build.yml/badge.svg?branch=Omega)](https://github.com/IamRPDev/xbmc-build/actions)
 
 ---
-*Back to [Kodi Build Hub Index](https://github.com/IamRPDev/kodi-build)*
+*Back to [Kodi Build Hub](https://github.com/IamRPDev/kodi-build)*
