@@ -53,6 +53,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install System Dependencies
+        if: ${{ !contains(runner.labels, 'self-hosted') }}
         run: |
           if [ "${{ runner.os }}" == "Linux" ]; then
             sudo apt update
