@@ -39,7 +39,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
     name: Build ${{ matrix.branch }} on ${{ matrix.platform }}
-    runs-on: ${{ (matrix.platform == 'osx64' && 'macos-latest') || ('True' == 'True' && fromJSON('["self-hosted", "linux64"]') || fromJSON('["self-hosted", "lightweight"]')) }}
+    runs-on: ${{ (matrix.platform == 'osx64' && 'macos-latest') || (matrix.platform == 'linux64' && fromJSON('["self-hosted", "linux64"]')) || fromJSON('["self-hosted", "lightweight"]') }}
     defaults:
       run:
         shell: bash
@@ -56,12 +56,7 @@ jobs:
         run: |
           if [ "${{ runner.os }}" == "Linux" ]; then
             sudo apt update
-            sudo apt install -y build-essential autoconf automake autopoint gettext cmake curl gawk gperf python3-dev libtool zip unzip \
-              libudev-dev libdrm-dev libgbm-dev libasound2-dev libpulse-dev libva-dev libvdpau-dev libxml2-dev libxslt1-dev \
-              libsqlite3-dev libcurl4-openssl-dev libssl-dev libbluray-dev libcdio-dev libiso9660-dev liblzo2-dev libpcre3-dev \
-              libmysqlclient-dev libcap-dev libfribidi-dev libfontconfig1-dev libfreetype6-dev libass-dev libfribidi-dev \
-              libdbus-1-dev libsystemd-dev libavahi-client-dev libavahi-common-dev libmicrohttpd-dev libtinyxml-dev \
-              libyajl-dev libplist-dev libnfs-dev libshairplay-dev libsmbclient-dev libfmt-dev libspdlog-dev libflatbuffers-dev
+            sudo apt install -y build-essential autoconf automake autopoint gettext cmake curl gawk gperf python3-dev libtool zip unzip libudev-dev libdrm-dev libgbm-dev libasound2-dev libpulse-dev libva-dev libvdpau-dev libxml2-dev libxslt1-dev libsqlite3-dev libcurl4-openssl-dev libssl-dev libbluray-dev libcdio-dev libiso9660-dev liblzo2-dev libpcre3-dev libmysqlclient-dev libcap-dev libfribidi-dev libfontconfig1-dev libfreetype6-dev libass-dev libdbus-1-dev libsystemd-dev libavahi-client-dev libavahi-common-dev libmicrohttpd-dev libtinyxml-dev libyajl-dev libplist-dev libnfs-dev libshairplay-dev libsmbclient-dev libfmt-dev libspdlog-dev libflatbuffers-dev
             if [ "${{ matrix.platform }}" == "linux64" ]; then
               sudo apt install -y libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxrender-dev libxss-dev libgl1-mesa-dev
             fi
@@ -98,9 +93,9 @@ jobs:
                 cd source/xbmc/tools/depends
                 ./bootstrap
                 case "${{ matrix.platform }}" in
-                  win64) CONFIG_FLAGS="--host=x86_64-w64-mingw32" ;;
-                  android-arm64) CONFIG_FLAGS="--host=aarch64-linux-android --with-sdk=/opt/android-sdk --with-ndk=/opt/android-sdk/ndk-bundle" ;;
-                  osx64) CONFIG_FLAGS="--with-platform=macos" ;;
+                  win64) export CONFIG_FLAGS="--host=x86_64-w64-mingw32 --with-platform=windows" ;;
+                  android-arm64) export CONFIG_FLAGS="--host=aarch64-linux-android --with-platform=android --with-sdk=/opt/android-sdk --with-ndk=/opt/android-sdk/ndk-bundle" ;;
+                  osx64) export CONFIG_FLAGS="--with-platform=macos" ;;
                 esac
                 ./configure --prefix=$(pwd)/../../../../xbmc-deps $CONFIG_FLAGS
                 make -j$(nproc || sysctl -n hw.ncpu)
@@ -145,7 +140,7 @@ jobs:
             exit 0
           fi
           
-          DIST_REPO="IamRPDev/xbmc-build-${{ matrix.platform }}"
+          DIST_REPO="RPDevs-Builds/xbmc-build-${{ matrix.platform }}"
           gh release create "$TAG" $FILE \
             --repo "$DIST_REPO" \
             --title "Kodi Core ${{ matrix.branch }} Build $TAG" \
