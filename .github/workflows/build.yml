@@ -84,7 +84,8 @@ jobs:
                   -DENABLE_INTERNAL_FFMPEG=ON -DENABLE_INTERNAL_EXIV2=ON -DENABLE_INTERNAL_DAV1D=ON \
                   -DENABLE_INTERNAL_FSTRCMP=ON -DENABLE_INTERNAL_FLATBUFFERS=ON -DENABLE_INTERNAL_UDFREAD=ON \
                   -DENABLE_INTERNAL_SPDLOG=ON -DENABLE_INTERNAL_FMT=ON -DENABLE_INTERNAL_NLOHMANNJSON=ON \
-                  -DENABLE_INTERNAL_RAPIDJSON=ON -DENABLE_INTERNAL_CROSSGUID=ON
+                  -DENABLE_INTERNAL_RAPIDJSON=ON -DENABLE_INTERNAL_CROSSGUID=ON -DENABLE_INTERNAL_TAGLIB=ON \
+                  -DENABLE_INTERNAL_LZO2=ON -DENABLE_INTERNAL_PCRE2=ON
                 make -j$(nproc || sysctl -n hw.ncpu) install
               elif [ "${{ matrix.platform }}" == "win64" ]; then
                 echo "⚠️ Windows Core build via depends is not supported on Linux. Skipping."
@@ -126,6 +127,10 @@ jobs:
 
       - name: Create Archive
         run: |
+          if [ ! -d "$OUT_DIR" ] || [ -z "$(ls -A $OUT_DIR)" ]; then
+            echo "Empty directory, skipping archive."
+            exit 0
+          fi
           TAG="v-${{ env.VERSION }}-${{ matrix.branch }}"
           echo "TAG=$TAG" >> $GITHUB_ENV
           FILENAME="xbmc-${{ matrix.platform }}-${{ env.VERSION }}-${{ matrix.branch }}"
@@ -142,8 +147,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "GH_PAT secret not found. Skipping release step."
+          if [ -z "$GH_TOKEN" ] || [ -z "$FILE" ]; then
+            echo "GH_PAT secret not found or file missing. Skipping release step."
             exit 0
           fi
           
