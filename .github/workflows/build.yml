@@ -198,3 +198,16 @@ jobs:
             --prerelease || \
           gh release upload "$TAG" $FILE --repo "$DIST_REPO" --clobber
 
+
+      - name: Send Status to Hub Aggregator
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          gh api -X POST repos/RPDevs-Builds/kodi-build/dispatches \
+            -H "Accept: application/vnd.github.v3+json" \
+            -f event_type="fleet_status_update" \
+            -F client_payload[repository]="xbmc-build" \
+            -F client_payload[status]="${{ job.status }}" \
+            -F client_payload[conclusion]="${{ job.status }}" \
+            -F client_payload[url]="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
