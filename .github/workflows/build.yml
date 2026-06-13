@@ -85,7 +85,9 @@ jobs:
                   -DENABLE_INTERNAL_FSTRCMP=ON -DENABLE_INTERNAL_FLATBUFFERS=ON -DENABLE_INTERNAL_UDFREAD=ON \
                   -DENABLE_INTERNAL_SPDLOG=ON -DENABLE_INTERNAL_FMT=ON -DENABLE_INTERNAL_NLOHMANNJSON=ON \
                   -DENABLE_INTERNAL_RAPIDJSON=ON -DENABLE_INTERNAL_CROSSGUID=ON -DENABLE_INTERNAL_TAGLIB=ON \
-                  -DENABLE_INTERNAL_LZO2=ON -DENABLE_INTERNAL_PCRE2=ON
+                  -DENABLE_INTERNAL_LZO2=ON -DENABLE_INTERNAL_PCRE2=ON -DENABLE_INTERNAL_TINYXML2=ON \
+                  -DENABLE_INTERNAL_SQLITE3=ON -DENABLE_INTERNAL_CURL=ON -DENABLE_INTERNAL_ASS=ON \
+                  -DENABLE_INTERNAL_LCMS2=ON -DENABLE_INTERNAL_PLIST=ON
                 make -j$(nproc || sysctl -n hw.ncpu) install
               elif [ "${{ matrix.platform }}" == "win64" ]; then
                 echo "⚠️ Windows Core build via depends is not supported on Linux. Skipping."
