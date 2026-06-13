@@ -44,6 +44,17 @@ jobs:
       run:
         shell: bash
     steps:
+      - name: Environment Validation (Pre-Flight)
+        run: |
+          echo "🔍 Running pre-flight checks..."
+          if [[ "${{ matrix.platform }}" != "osx64" ]]; then
+            ccache -s || echo "⚠️ ccache not available or failing"
+            gh auth status || echo "⚠️ gh cli auth issue"
+          fi
+          if [[ "${{ matrix.platform }}" == "android-arm64" ]]; then
+            ls -ld /opt/android-sdk/ndk/25.2.9519653 || exit 1
+          fi
+
       - name: Checkout Source
         uses: actions/checkout@v4
         with:
@@ -93,18 +104,29 @@ jobs:
                 echo "⚠️ Windows Core build via depends is not supported on Linux. Skipping."
                 exit 0
               else
-                # Cross-compilation or non-linux native using depends
-                cd source/xbmc/tools/depends
-                ./bootstrap
-                case "${{ matrix.platform }}" in
-                  android-arm64) export CONFIG_FLAGS="--host=aarch64-linux-android --with-sdk-path=/opt/android-sdk --with-ndk-path=/opt/android-sdk/ndk/25.2.9519653" ;;
-                  osx64) 
-                    export CONFIG_FLAGS="--with-platform=macos"
-                    export PATH="$(brew --prefix gettext)/bin:$(brew --prefix coreutils)/libexec/gnubin:$PATH"
-                    ;;
-                esac
-                ./configure --prefix=${{ github.workspace }}/xbmc-deps $CONFIG_FLAGS
-                make -j$(nproc || sysctl -n hw.ncpu)
+                # Download pre-compiled depends or fallback to cross-compilation
+                echo "⬇️ Downloading Pre-compiled Depends..."
+                DEPENDS_BRANCH="${{ matrix.branch == 'Piers' && 'master' || 'Omega' }}"
+                TAG="depends-${{ matrix.platform }}-$DEPENDS_BRANCH"
+                gh release download "$TAG" --repo "RPDevs-Builds/kodi-build" --pattern "depends-${{ matrix.platform }}.tar.gz" --dir . || echo "⚠️ Pre-compiled depends not found. Falling back to build..."
+                
+                if [ -f "depends-${{ matrix.platform }}.tar.gz" ]; then
+                  echo "✅ Extracting Depends..."
+                  mkdir -p ${{ github.workspace }}/xbmc-deps
+                  tar -xzf depends-${{ matrix.platform }}.tar.gz -C ${{ github.workspace }}/xbmc-deps
+                else
+                  cd source/xbmc/tools/depends
+                  ./bootstrap
+                  case "${{ matrix.platform }}" in
+                    android-arm64) export CONFIG_FLAGS="--host=aarch64-linux-android --with-sdk-path=/opt/android-sdk --with-ndk-path=/opt/android-sdk/ndk/25.2.9519653" ;;
+                    osx64) 
+                      export CONFIG_FLAGS="--with-platform=macos"
+                      export PATH="$(brew --prefix gettext)/bin:$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+                      ;;
+                  esac
+                  ./configure --prefix=${{ github.workspace }}/xbmc-deps $CONFIG_FLAGS
+                  make -j$(nproc || sysctl -n hw.ncpu)
+                fi
                 cd ${{ github.workspace }}
                 mkdir build && cd build
                 cmake ${{ github.workspace }}/source/xbmc -DCMAKE_INSTALL_PREFIX="$OUT_DIR" -DCMAKE_PREFIX_PATH=${{ github.workspace }}/xbmc-deps
@@ -112,13 +134,27 @@ jobs:
               fi
             else
               # Addon C++ Build
-              if [ "${{ matrix.platform }}" == "win64" ] || [ "${{ matrix.platform }}" == "android-arm64" ]; then
-                 echo "⚠️ Cross-compiling addons for ${{ matrix.platform }} requires KodiConfig.cmake which is missing. Skipping for now."
+              if [ "${{ matrix.platform }}" == "win64" ]; then
+                 echo "⚠️ Windows cross-compiling addons not fully supported yet. Skipping."
                  exit 0
               fi
+              if [ "${{ matrix.platform }}" != "linux64" ]; then
+                echo "⬇️ Downloading Pre-compiled Depends for Addon..."
+                DEPENDS_BRANCH="${{ matrix.branch == 'Piers' && 'master' || 'Omega' }}"
+                TAG="depends-${{ matrix.platform }}-$DEPENDS_BRANCH"
+                gh release download "$TAG" --repo "RPDevs-Builds/kodi-build" --pattern "depends-${{ matrix.platform }}.tar.gz" --dir . || echo "⚠️ Pre-compiled depends not found."
+                
+                if [ -f "depends-${{ matrix.platform }}.tar.gz" ]; then
+                  echo "✅ Extracting Depends..."
+                  mkdir -p ${{ github.workspace }}/xbmc-deps
+                  tar -xzf depends-${{ matrix.platform }}.tar.gz -C ${{ github.workspace }}/xbmc-deps
+                else
+                  echo "⚠️ Cannot cross-compile addon without KodiConfig.cmake from depends. Skipping."
+                  exit 0
+                fi
+              fi
               mkdir build && cd build
-              # Try to find KodiConfig.cmake if it was built in a previous step or provided
-              cmake ${{ github.workspace }}/source/xbmc -DCMAKE_INSTALL_PREFIX="$OUT_DIR" -DKodi_DIR=${{ github.workspace }}/xbmc-deps/lib/kodi
+              cmake ${{ github.workspace }}/source/xbmc -DCMAKE_INSTALL_PREFIX="$OUT_DIR" -DCMAKE_PREFIX_PATH=${{ github.workspace }}/xbmc-deps
               make -j$(nproc || sysctl -n hw.ncpu) install
             fi
           else
