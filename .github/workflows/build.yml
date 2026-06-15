@@ -28,9 +28,9 @@ jobs:
       - id: set-matrix
         run: |
           if [ "${{ github.event.inputs.branch_input }}" == "both" ]; then
-            echo 'matrix={"branch": ["Piers", "Omega"], "platform": ["linux64", "win64", "android-arm64", "osx64"]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"branch": ["Piers", "Omega"], "platform": ["linux64", "win64", "android-arm64", "osx64", "linux-arm64", "ios", "tvos"]}' >> $GITHUB_OUTPUT
           else
-            echo 'matrix={"branch": ["${{ github.event.inputs.branch_input }}"], "platform": ["linux64", "win64", "android-arm64", "osx64"]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"branch": ["${{ github.event.inputs.branch_input }}"], "platform": ["linux64", "win64", "android-arm64", "osx64", "linux-arm64", "ios", "tvos"]}' >> $GITHUB_OUTPUT
           fi
 
   build:
@@ -39,7 +39,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
     name: Build ${{ matrix.branch }} on ${{ matrix.platform }}
-    runs-on: ${{ (matrix.platform == 'osx64' && 'macos-latest') || (true && fromJSON('["self-hosted", "linux64"]')) || fromJSON('["self-hosted", "lightweight"]') }}
+    runs-on: ${{ ( (matrix.platform == 'osx64' || matrix.platform == 'ios' || matrix.platform == 'tvos') && 'macos-latest') || (matrix.platform == 'win64' && 'windows-2022') || (true && fromJSON('["self-hosted", "linux64"]')) || fromJSON('["self-hosted", "lightweight"]') }}
     defaults:
       run:
         shell: bash
@@ -47,7 +47,7 @@ jobs:
       - name: Environment Validation (Pre-Flight)
         run: |
           echo "🔍 Running pre-flight checks..."
-          if [[ "${{ matrix.platform }}" != "osx64" ]]; then
+          if [[ "${{ matrix.platform }}" != "osx64" && "${{ matrix.platform }}" != "ios" && "${{ matrix.platform }}" != "tvos" && "${{ matrix.platform }}" != "win64" ]]; then
             ccache -s || echo "⚠️ ccache not available or failing"
             gh auth status || echo "⚠️ gh cli auth issue"
           fi
@@ -64,7 +64,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install System Dependencies
-        if: ${{ matrix.platform == 'osx64' }}
+        if: ${{ matrix.platform == 'osx64' || matrix.platform == 'ios' || matrix.platform == 'tvos' }}
         run: |
           brew install cmake ninja nasm gettext coreutils groff
 
@@ -100,44 +100,66 @@ jobs:
                   -DENABLE_INTERNAL_SQLITE3=ON -DENABLE_INTERNAL_CURL=ON -DENABLE_INTERNAL_ASS=ON \
                   -DENABLE_INTERNAL_LCMS2=ON -DENABLE_INTERNAL_PLIST=ON
                 make -j$(nproc || sysctl -n hw.ncpu) install
-              elif [ "${{ matrix.platform }}" == "win64" ]; then
-                echo "⚠️ Windows Core build via depends is not supported on Linux. Skipping."
-                exit 0
               else
-                # Download pre-compiled depends or fallback to cross-compilation
+                # Universal Depends-based build
                 echo "⬇️ Downloading Pre-compiled Depends..."
                 DEPENDS_BRANCH="${{ matrix.branch == 'Piers' && 'master' || 'Omega' }}"
                 TAG="depends-${{ matrix.platform }}-$DEPENDS_BRANCH"
-                gh release download "$TAG" --repo "RPDevs-Builds/kodi-build" --pattern "depends-${{ matrix.platform }}.tar.gz" --dir . || echo "⚠️ Pre-compiled depends not found. Falling back to build..."
+                gh release download "$TAG" --repo "RPDevs-Builds/kodi-build" --pattern "depends-${{ matrix.platform }}.tar.gz" --dir . || echo "⚠️ Pre-compiled depends not found."
                 
                 if [ -f "depends-${{ matrix.platform }}.tar.gz" ]; then
                   echo "✅ Extracting Depends..."
                   mkdir -p ${{ github.workspace }}/xbmc-deps
                   tar -xzf depends-${{ matrix.platform }}.tar.gz -C ${{ github.workspace }}/xbmc-deps
+                elif [ "${{ matrix.platform }}" == "win64" ]; then
+                  echo "🚀 Fetching Windows Binary Dependencies..."
+                  cd source/xbmc/tools/buildsteps/windows/x64
+                  ./download-dependencies.bat
+                  mkdir -p ${{ github.workspace }}/xbmc-deps
+                  cp -r ../../../project/BuildDependencies/* ${{ github.workspace }}/xbmc-deps/
+                  cd ../../../../..
                 else
-                  cd source/xbmc/tools/depends
-                  ./bootstrap
-                  case "${{ matrix.platform }}" in
-                    android-arm64) export CONFIG_FLAGS="--host=aarch64-linux-android --with-sdk-path=/opt/android-sdk --with-ndk-path=/opt/android-sdk/ndk/25.2.9519653" ;;
-                    osx64) 
-                      export CONFIG_FLAGS="--with-platform=macos"
-                      export PATH="$(brew --prefix gettext)/bin:$(brew --prefix coreutils)/libexec/gnubin:$PATH"
-                      ;;
-                  esac
-                  ./configure --prefix=${{ github.workspace }}/xbmc-deps $CONFIG_FLAGS
-                  make -j$(nproc || sysctl -n hw.ncpu)
+                   echo "🛠️ Falling back to manual depends build..."
+                   cd source/xbmc/tools/depends
+                   ./bootstrap
+                   case "${{ matrix.platform }}" in
+                     android-arm64) export CONFIG_FLAGS="--host=aarch64-linux-android --with-sdk-path=/opt/android-sdk --with-ndk-path=/opt/android-sdk/ndk/25.2.9519653" ;;
+                     osx64) 
+                       export CONFIG_FLAGS="--with-platform=macos"
+                       export PATH="$(brew --prefix gettext)/bin:$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+                       export CFLAGS="-Wno-error=implicit-function-declaration -Wno-error=incompatible-function-pointer-types -Wno-error=int-conversion"
+                       export CXXFLAGS="$CFLAGS"
+                       ;;
+                     ios)
+                       export CONFIG_FLAGS="--with-platform=ios --host=aarch64-apple-darwin"
+                       export PATH="$(brew --prefix gettext)/bin:$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+                       export CFLAGS="-Wno-error=implicit-function-declaration -Wno-error=incompatible-function-pointer-types -Wno-error=int-conversion"
+                       export CXXFLAGS="$CFLAGS"
+                       ;;
+                     tvos)
+                       export CONFIG_FLAGS="--with-platform=tvos --host=aarch64-apple-darwin"
+                       export PATH="$(brew --prefix gettext)/bin:$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+                       export CFLAGS="-Wno-error=implicit-function-declaration -Wno-error=incompatible-function-pointer-types -Wno-error=int-conversion"
+                       export CXXFLAGS="$CFLAGS"
+                       ;;
+                     linux-arm64) export CONFIG_FLAGS="--host=aarch64-linux-gnu --with-rendersystem=gles" ;;
+                   esac
+                   ./configure --prefix=${{ github.workspace }}/xbmc-deps $CONFIG_FLAGS
+                   make -j$(nproc || sysctl -n hw.ncpu)
+                   cd ../../../
                 fi
-                cd ${{ github.workspace }}
+
                 mkdir build && cd build
-                cmake ${{ github.workspace }}/source/xbmc -DCMAKE_INSTALL_PREFIX="$OUT_DIR" -DCMAKE_PREFIX_PATH=${{ github.workspace }}/xbmc-deps
-                make -j$(nproc || sysctl -n hw.ncpu) install
+                if [ "${{ matrix.platform }}" == "win64" ]; then
+                   cmake ${{ github.workspace }}/source/xbmc -G "Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX="$OUT_DIR"
+                   cmake --build . --config Release --target install
+                else
+                   cmake ${{ github.workspace }}/source/xbmc -DCMAKE_INSTALL_PREFIX="$OUT_DIR" -DCMAKE_PREFIX_PATH=${{ github.workspace }}/xbmc-deps
+                   make -j$(nproc || sysctl -n hw.ncpu) install
+                fi
               fi
             else
               # Addon C++ Build
-              if [ "${{ matrix.platform }}" == "win64" ]; then
-                 echo "⚠️ Windows cross-compiling addons not fully supported yet. Skipping."
-                 exit 0
-              fi
               if [ "${{ matrix.platform }}" != "linux64" ]; then
                 echo "⬇️ Downloading Pre-compiled Depends for Addon..."
                 DEPENDS_BRANCH="${{ matrix.branch == 'Piers' && 'master' || 'Omega' }}"
@@ -149,13 +171,18 @@ jobs:
                   mkdir -p ${{ github.workspace }}/xbmc-deps
                   tar -xzf depends-${{ matrix.platform }}.tar.gz -C ${{ github.workspace }}/xbmc-deps
                 else
-                  echo "⚠️ Cannot cross-compile addon without KodiConfig.cmake from depends. Skipping."
+                  echo "⚠️ Cannot compile addon without KodiConfig.cmake from depends. Skipping."
                   exit 0
                 fi
               fi
               mkdir build && cd build
-              cmake ${{ github.workspace }}/source/xbmc -DCMAKE_INSTALL_PREFIX="$OUT_DIR" -DCMAKE_PREFIX_PATH=${{ github.workspace }}/xbmc-deps
-              make -j$(nproc || sysctl -n hw.ncpu) install
+              if [ "${{ matrix.platform }}" == "win64" ]; then
+                 cmake ${{ github.workspace }}/source/xbmc -G "Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX="$OUT_DIR" -DCMAKE_PREFIX_PATH=${{ github.workspace }}/xbmc-deps
+                 cmake --build . --config Release --target install
+              else
+                 cmake ${{ github.workspace }}/source/xbmc -DCMAKE_INSTALL_PREFIX="$OUT_DIR" -DCMAKE_PREFIX_PATH=${{ github.workspace }}/xbmc-deps
+                 make -j$(nproc || sysctl -n hw.ncpu) install
+              fi
             fi
           else
             echo "📦 Packaging Python/XML Addon..."
