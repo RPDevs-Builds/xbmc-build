@@ -21,7 +21,7 @@ env:
 
 jobs:
   check-runner:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux64]
     outputs:
       runner_status: ${{ steps.check.outputs.status }}
     steps:
@@ -51,7 +51,7 @@ jobs:
           fi
 
   setup-matrix:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux64]
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
